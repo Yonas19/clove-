@@ -24,6 +24,10 @@ import {
   ExternalLink,
   ClipboardCheck,
   Loader2,
+  Pencil,
+  Save,
+  PartyPopper,
+  PackageCheck,
 } from "lucide-react";
 import {
   EVIDENCE_STATUS_META,
@@ -92,6 +96,7 @@ interface PartData {
   claims: Claim[];
   sources: Source[];
   assessments: Assessment[];
+  decisions: { attribute: string; answer: string; answerType: string; note: string | null }[];
   events: EventItem[];
 }
 
@@ -162,24 +167,48 @@ export function PartWorkspaceClient({
   const [isApproving, setIsApproving] = useState(false);
   const [approvalError, setApprovalError] = useState<string | null>(null);
   const [isApproved, setIsApproved] = useState(initialIsApproved);
+  const [posted, setPosted] = useState(false);
+  const [editingAttribute, setEditingAttribute] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
 
-  // Group claims by attribute
+  // Product record fields shown even before evidence exists. Decisions override
+  // extracted values so every edit refreshes the record, draft and checklist.
   const attributeGroups = useMemo(() => {
-    const groups: Record<string, { claims: Claim[]; value: string; status: EvidenceStatus; count: number }> = {};
+    const groups: Record<string, { claims: Claim[]; value: string; status: EvidenceStatus; count: number; source: string }> = {};
+    const recordFields = ["partType", "brand", "partNumber", "donorVehicle", "donorMake", "donorModel", "donorYear", "condition", "visibleDamage", "electricalTestStatus", "storageLocation", "identifiers", "includedComponents", "accessories", "side", "packagedDimensions", "packagedWeight", "vin", "oemPartNumber"];
+    const assessmentByAttribute = new Map(initialData.assessments.map((item) => [item.attribute, item]));
+
+    for (const field of recordFields) {
+      const assessment = assessmentByAttribute.get(field);
+      groups[field] = {
+        claims: [],
+        value: "—",
+        status: assessment?.assessmentType === "conflict" ? "conflicting" : assessment?.severity === "error" ? "unverified" : "reported",
+        count: 0,
+        source: "Missing",
+      };
+    }
     for (const claim of initialData.claims) {
       if (!groups[claim.attribute]) {
-        groups[claim.attribute] = {
-          claims: [],
-          value: claim.value || "—",
-          status: claim.evidenceStatus,
-          count: 0,
-        };
+        groups[claim.attribute] = { claims: [], value: "—", status: claim.evidenceStatus, count: 0, source: "evidence" };
       }
       groups[claim.attribute].claims.push(claim);
+      groups[claim.attribute].value = claim.value || groups[claim.attribute].value;
+      groups[claim.attribute].status = claim.evidenceStatus;
       groups[claim.attribute].count++;
+      groups[claim.attribute].source = initialData.sources.find((source) => source.id === claim.sourceId)?.type || "evidence";
+    }
+    for (const decision of initialData.decisions) {
+      if (decision.answerType === "skip") continue;
+      if (!groups[decision.attribute]) {
+        groups[decision.attribute] = { claims: [], value: "—", status: "reported", count: 0, source: "voice or seller" };
+      }
+      groups[decision.attribute].value = decision.answer || "—";
+      groups[decision.attribute].status = "seller_confirmed";
+      groups[decision.attribute].source = decision.note?.includes("voice") ? "voice" : "seller input";
     }
     return groups;
-  }, [initialData.claims]);
+  }, [initialData.claims, initialData.decisions, initialData.assessments, initialData.sources]);
 
   // Source lookup map
   const sourceMap = useMemo(() => {
@@ -278,6 +307,7 @@ export function PartWorkspaceClient({
       }
 
       setIsApproved(true);
+      setPosted(true);
       router.refresh();
     } catch (err) {
       setApprovalError(
@@ -287,6 +317,18 @@ export function PartWorkspaceClient({
       setIsApproving(false);
     }
   }, [partId, router]);
+
+  const saveRecordEdit = useCallback(async () => {
+    if (!editingAttribute || !editValue.trim()) return;
+    try {
+      window.localStorage.setItem(`clove-record-${partId}-${editingAttribute}`, editValue.trim());
+    } catch {
+      // Persistence is helpful but must not prevent an auditable server update.
+    }
+    await resolveQuestion(editingAttribute, editValue.trim(), "free_entry");
+    setEditingAttribute(null);
+    setEditValue("");
+  }, [editingAttribute, editValue, partId, resolveQuestion]);
 
   const handleRowClick = (attr: string) => {
     setSelectedAttribute(attr);
@@ -375,7 +417,21 @@ export function PartWorkspaceClient({
               transition={{ duration: 0.2 }}
               className="space-y-6"
             >
-              {/* Evidence table */}
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-sm font-semibold text-amber-900">Defects & testing</h2>
+                    <p className="mt-1 text-xs text-amber-800">Never claim a part works only because it looks undamaged.</p>
+                  </div>
+                  <button onClick={() => { setEditingAttribute("visibleDamage"); setEditValue(attributeGroups.visibleDamage?.value === "—" ? "" : attributeGroups.visibleDamage?.value || ""); }} className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100">Edit defects</button>
+                </div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <div className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm"><span className="font-medium">Condition: </span>{attributeGroups.condition?.value || "—"}</div>
+                  <div className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm"><span className="font-medium">Testing: </span>{attributeGroups.electricalTestStatus?.value || "not tested"}</div>
+                </div>
+              </div>
+
+              {/* Editable product record */}
               <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <div className="border-b border-slate-100 px-4 py-3">
                   <h2 className="text-sm font-semibold text-slate-900">Field Evidence</h2>
@@ -396,22 +452,28 @@ export function PartWorkspaceClient({
                   <tbody className="divide-y divide-slate-100">
                     {Object.entries(attributeGroups).map(([attr, info]) => {
                       const meta = EVIDENCE_STATUS_META[info.status] || EVIDENCE_STATUS_META.reported;
+                      const borderClass = info.status === "conflicting" ? "border-l-4 border-amber-500 bg-amber-50/40" : info.value === "—" || info.status === "unverified" ? "border-l-4 border-red-500 bg-red-50/40" : "border-l-4 border-emerald-500 bg-emerald-50/50";
+                      const isEditing = editingAttribute === attr;
                       return (
-                        <tr
-                          key={attr}
-                          onClick={() => handleRowClick(attr)}
-                          className="cursor-pointer transition-colors hover:bg-indigo-50/40"
-                        >
+                        <tr key={attr} className={`transition-colors hover:bg-slate-50 ${borderClass}`}>
                           <td className="px-4 py-2.5 font-medium text-slate-900">{attr}</td>
-                          <td className="px-4 py-2.5 font-mono text-xs text-slate-700">{info.value}</td>
-                          <td className="px-4 py-2.5 text-center text-slate-400">{info.count}</td>
+                          <td className="px-4 py-2.5 font-mono text-xs text-slate-700">
+                            {isEditing ? (
+                              <div className="flex gap-2">
+                                <input autoFocus value={editValue} onChange={(event) => setEditValue(event.target.value)} className="w-full rounded border border-emerald-400 px-2 py-1 text-xs outline-none" />
+                                <button onClick={saveRecordEdit} disabled={isResolving} className="rounded bg-emerald-600 p-1 text-white"><Save className="h-3.5 w-3.5" /></button>
+                              </div>
+                            ) : info.value}
+                          </td>
+                          <td className="px-4 py-2.5 text-center text-slate-400" title={`Source: ${info.source}`}>{info.source}</td>
                           <td className="px-4 py-2.5 text-center">
-                            <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${chipClass[meta.color]}`}>
-                              {meta.label}
-                            </span>
+                            <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${chipClass[meta.color]}`}>{meta.label}</span>
                           </td>
                           <td className="px-4 py-2.5">
-                            <ChevronRight className="h-4 w-4 text-slate-300" />
+                            <div className="flex gap-1">
+                              <button onClick={() => { setEditingAttribute(attr); setEditValue(info.value === "—" ? "" : info.value); }} className="rounded p-1 text-slate-400 hover:bg-white hover:text-emerald-600" title="Edit this value"><Pencil className="h-3.5 w-3.5" /></button>
+                              <button onClick={() => handleRowClick(attr)} className="rounded p-1 text-slate-400 hover:bg-white"><ChevronRight className="h-4 w-4" /></button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -763,7 +825,7 @@ export function PartWorkspaceClient({
                       }`}
                     >
                       {isApproving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                      {isApproved ? "Approved" : "Approve draft"}
+                      {isApproved ? "Posted" : "Post the product"}
                     </button>
                   </div>
                   {approvalError && (
@@ -885,6 +947,20 @@ export function PartWorkspaceClient({
           )}
         </AnimatePresence>
       </main>
+
+      <AnimatePresence>
+        {posted && (
+          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 p-4" onClick={() => setPosted(false)}>
+            <div className="relative w-full max-w-sm overflow-hidden rounded-3xl bg-white p-8 text-center shadow-2xl" onClick={(event) => event.stopPropagation()}>
+              <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-around text-2xl">🎉 ✨ 🎊 ✨ 🎉</div>
+              <div className="mx-auto mt-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100"><PartyPopper className="h-8 w-8 text-emerald-600" /></div>
+              <h2 className="mt-4 text-xl font-bold text-slate-900">Post complete</h2>
+              <p className="mt-2 text-sm text-slate-600">Your product listing card for {initialData.part.displayName || partId} is approved and ready to publish.</p>
+              <button onClick={() => setPosted(false)} className="mt-5 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"><PackageCheck className="h-4 w-4" />Done</button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ─── Claim Drawer ──────────────────────────────────────────────────── */}
       <AnimatePresence>

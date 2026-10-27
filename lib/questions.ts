@@ -48,6 +48,14 @@ const HOW_TO_CHECK: Record<string, string> = {
     "Measure the packed box (or the part plus packing material) — length, width and height in centimetres.",
   packagedWeight:
     "Weigh the packed part on a scale and record the result in kilograms.",
+  condition:
+    "Confirm whether the item is used and describe its condition. Do not claim it works because it looks undamaged.",
+  includedComponents:
+    "List every component included with the sale, such as glass, cover, wiring or fasteners.",
+  vin:
+    "Read the 17-character VIN from the donor vehicle or its record and photograph it if available.",
+  oemPartNumber:
+    "Read the manufacturer OEM label carefully and compare it with the part number being listed.",
   accessories:
     "Count and list the items that come with the part: screws, clips, wiring harness, trim cover.",
   photoRefs:
@@ -70,7 +78,11 @@ const ATTR_LABEL: Record<string, string> = {
   accessories: "Accessories",
   photoRefs: "Photo references",
   packagedDimensions: "Packaged dimensions",
-  packagedWeight: "Packaged weight",
+  packagedWeight: "Packed weight",
+  condition: "Used condition",
+  includedComponents: "Included components",
+  vin: "Vehicle identification number (VIN)",
+  oemPartNumber: "OEM part number",
 };
 
 function labelFor(attr: string): string {
@@ -123,13 +135,23 @@ function buildMissingQuestion(
   partId: string,
   attribute: string,
 ): Question {
-  const candidates: QuestionCandidate[] = [
-    {
-      value: "",
-      label: "Skip — no evidence available for this field",
-      unverified: true,
-    },
-  ];
+  const quickValues: Record<string, string[]> = {
+    condition: ["used - no visible damage", "used - defects present"],
+    visibleDamage: ["no visible damage", "defects present - describe below"],
+    electricalTestStatus: ["passed", "failed", "not_tested"],
+    side: ["L", "R"],
+    partType: ["mirror"],
+  };
+  const candidates: QuestionCandidate[] = (quickValues[attribute] ?? []).map((value) => ({
+    value,
+    label: value.replaceAll("_", " "),
+    unverified: false,
+  }));
+  candidates.push({
+    value: "",
+    label: "Skip — no evidence available for this field",
+    unverified: true,
+  });
 
   return {
     id: `Q-MISSING-${partId}-${attribute}`,

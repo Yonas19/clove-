@@ -230,8 +230,8 @@ export default function IntakePage() {
       ]);
 
       await new Promise((r) => setTimeout(r, 800));
-      // Open the dashboard's guided details popup immediately after analysis.
-      router.push(`/dashboard?guide=${encodeURIComponent(partId)}`);
+      // Continue directly into the analyzed part's questions and product record.
+      router.push(`/parts/${encodeURIComponent(partId)}?tab=questions`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
       setIsUploading(false);

@@ -49,6 +49,7 @@ export default function ReadinessPanel({ readiness }: Props) {
 
   const passed = readiness.items.filter((i) => i.status === "pass");
   const failed = readiness.items.filter((i) => i.status === "fail");
+  const priorityActions = [...failed].sort((a, b) => Number(b.blocking) - Number(a.blocking));
 
   return (
     <div className="space-y-6">
@@ -90,6 +91,23 @@ export default function ReadinessPanel({ readiness }: Props) {
           </div>
         )}
       </motion.div>
+
+      {priorityActions.length > 0 && (
+        <div className="overflow-hidden rounded-2xl border border-amber-200 bg-amber-50/60 shadow-sm">
+          <div className="flex items-center gap-2 border-b border-amber-200 px-4 py-3">
+            <AlertTriangle className="h-4 w-4 text-amber-600" />
+            <h3 className="text-sm font-semibold text-amber-900">Prioritised seller action plan</h3>
+          </div>
+          <ol className="space-y-3 p-4">
+            {priorityActions.map((item, index) => (
+              <li key={item.id} className="flex gap-3 rounded-xl bg-white p-3">
+                <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${item.blocking ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>P{index + 1}</span>
+                <div><p className="text-sm font-semibold text-slate-900">{item.label}</p><p className="mt-0.5 text-sm text-slate-600">{item.detail}</p></div>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3">

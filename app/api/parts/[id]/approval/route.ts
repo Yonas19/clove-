@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, schema } from "@/lib/db/client";
+import { eq } from "drizzle-orm";
 import { approveLatestDraft, generateAndStoreListingDraft } from "@/lib/listing";
 import { computeAndStoreReadiness } from "@/lib/readiness";
 
@@ -46,7 +47,7 @@ export async function POST(
       );
     }
 
-    db.update(schema.parts).set({ updatedAt: new Date() }).run();
+    db.update(schema.parts).set({ updatedAt: new Date() }).where(eq(schema.parts.id, partId)).run();
 
     return NextResponse.json({
       ok: true,

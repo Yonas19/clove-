@@ -74,7 +74,21 @@ export function verifyPart(partId: string): VerificationResult {
   const db = getDb();
   const now = new Date();
   const allClaims = db.select().from(schema.claims).all().filter((c) => c.partId === partId);
-  const requiredFields = loadRequiredFields();
+  const decisions = db.select().from(schema.decisions).all().filter((d) => d.partId === partId && d.answerType !== "skip");
+  const decisionByAttribute = new Map<string, string>();
+  for (const decision of decisions) decisionByAttribute.set(decision.attribute, decision.answer);
+
+  // Synthetic marketplace standard used by the demo. These fields are asked
+  // after analysis and seller answers are recorded as auditable decisions.
+  const requiredFields = [
+    ...new Set([
+      ...loadRequiredFields(),
+      "condition",
+      "includedComponents",
+      "packagedDimensions",
+      "packagedWeight",
+    ]),
+  ];
   const referenceData = loadReferenceData();
 
   const assessments: VerificationResult["assessments"] = [];
@@ -149,7 +163,8 @@ export function verifyPart(partId: string): VerificationResult {
   // ─── Check for missing required fields ────────────────────────────────────
   for (const field of requiredFields) {
     const fieldClaims = claimsByAttribute[field] || [];
-    const hasValue = fieldClaims.some(
+    const decisionValue = decisionByAttribute.get(field)?.trim();
+    const hasValue = Boolean(decisionValue) || fieldClaims.some(
       (c) => c.value && c.value.trim() !== "" && c.extractionStatus !== "failed",
     );
 
@@ -174,6 +189,36 @@ export function verifyPart(partId: string): VerificationResult {
         detail: assessments[assessments.length - 1].detail,
         createdAt: now,
       }).run();
+    }
+  }
+
+  // OEM-marked parts require identity confirmation in this synthetic standard.
+  const brand = decisionByAttribute.get("brand") || claimsByAttribute.brand?.find((claim) => claim.value)?.value || "";
+  const oemRequired = /\boem\b|genuine/i.test(brand);
+  if (oemRequired) {
+    for (const field of ["vin", "oemPartNumber"]) {
+      const value = decisionByAttribute.get(field)?.trim() || claimsByAttribute[field]?.find((claim) => claim.value)?.value?.trim();
+      if (!value) {
+        const id = `ASM-${partId}-${field}-missing-${Date.now()}`;
+        assessments.push({
+          id,
+          attribute: field,
+          assessmentType: "missing",
+          severity: "error",
+          detail: `OEM-marked part requires a ${field === "vin" ? "VIN" : "manufacturer OEM part number"} before listing.`,
+        });
+        missing.push(field);
+        db.insert(schema.assessments).values({ id, partId, attribute: field, assessmentType: "missing", severity: "error", detail: assessments[assessments.length - 1].detail, createdAt: now }).run();
+      }
+    }
+
+    const oemPartNumber = decisionByAttribute.get("oemPartNumber") || claimsByAttribute.oemPartNumber?.find((claim) => claim.value)?.value;
+    const partNumber = decisionByAttribute.get("partNumber") || claimsByAttribute.partNumber?.find((claim) => claim.value)?.value;
+    if (oemPartNumber && partNumber && oemPartNumber.trim().toLowerCase() !== partNumber.trim().toLowerCase()) {
+      const id = `ASM-${partId}-oemPartNumber-conflict-${Date.now()}`;
+      assessments.push({ id, attribute: "oemPartNumber", assessmentType: "conflict", severity: "error", detail: "OEM part number does not match the listed part number. Confirm the manufacturer label before publishing." });
+      conflicts.push("oemPartNumber");
+      db.insert(schema.assessments).values({ id, partId, attribute: "oemPartNumber", assessmentType: "conflict", severity: "error", detail: assessments[assessments.length - 1].detail, createdAt: now }).run();
     }
   }
 

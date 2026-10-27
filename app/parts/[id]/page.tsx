@@ -55,10 +55,13 @@ async function getPartData(partId: string) {
 
 export default async function PartWorkspace({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }) {
   const { id } = await params;
+  const requestedTab = (await searchParams).tab;
   const data = await getPartData(id);
 
   if (!data) {
@@ -132,6 +135,12 @@ export default async function PartWorkspace({
       createdAt: a.createdAt instanceof Date
         ? a.createdAt.toISOString()
         : String(a.createdAt),
+    })),
+    decisions: data.decisions.map((d) => ({
+      attribute: d.attribute,
+      answer: d.answer,
+      answerType: d.answerType,
+      note: d.note,
     })),
     events: data.events.map((e) => ({
       id: e.id,
@@ -219,6 +228,7 @@ export default async function PartWorkspace({
         chatMessages={chat.messages}
         detectedIssues={chat.detectedIssues}
         isApproved={isApproved}
+        initialTab={requestedTab === "questions" ? "questions" : "evidence"}
       />
     </div>
   );

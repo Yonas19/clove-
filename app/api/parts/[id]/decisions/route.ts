@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, schema } from "@/lib/db/client";
+import { eq } from "drizzle-orm";
 import { recordDecision, generateQuestions } from "@/lib/questions";
 import { computeAndStoreReadiness } from "@/lib/readiness";
 import { generateAndStoreListingDraft } from "@/lib/listing";
@@ -65,7 +66,7 @@ export async function POST(
     const draft = generateAndStoreListingDraft(partId);
     const readiness = computeAndStoreReadiness(partId);
 
-    db.update(schema.parts).set({ updatedAt: new Date() }).run();
+    db.update(schema.parts).set({ updatedAt: new Date() }).where(eq(schema.parts.id, partId)).run();
 
     const remainingQuestions = generateQuestions(partId);
 
