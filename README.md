@@ -1,44 +1,82 @@
 # Clove
 
-Clove is a modern, high-performance web platform built to automate item intake, track salvage pipelines, and power real-time camera-assisted detection workflows. Built with Next.js and TypeScript, Clove streamlines inventory processing, physical inspection, and catalog management into a single intuitive interface.
+<p align="center">
+  <img src="docs/images/banner.png" alt="Clove Banner" width="100%" />
+</p>
+
+<p align="center">
+  <a href="https://github.com/Yonas19/clove-/blob/main/LICENSE">
+    <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" />
+  </a>
+  <img src="https://img.shields.io/badge/Next.js-14%2B-black?logo=next.js" alt="Next.js" />
+  <img src="https://img.shields.io/badge/TypeScript-Ready-3178C6?logo=typescript" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/TailwindCSS-Styled-38B2AC?logo=tailwind-css" alt="Tailwind CSS" />
+  <img src="https://img.shields.io/badge/SQLite-Local_Storage-003B57?logo=sqlite" alt="SQLite" />
+</p>
 
 ---
 
-## Features
+## Overview
 
-- **Automated Intake Workflow:** Interactive intake pipelines (`/intake`) designed to record, categorize, and process physical items efficiently.
-- **Camera-Assisted Detection:** Real-time visual identification and inspection tooling built directly into the intake UI.
-- **Local Persistence & Synchronization:** Integrated SQLite database support for local caching, rapid querying, and consistent data state.
-- **Modern Responsive UI:** Clean visual design built with Tailwind CSS, ensuring smooth transitions across desktop and workstation/tablet screens.
-- **Type-Safe Full-Stack Architecture:** End-to-end TypeScript integration with React Server Components and Next.js route handlers.
+**Clove** is a high-performance inventory and item intake system powered by real-time computer vision and camera detection. Designed for salvage pipelines, asset tracking, and warehouse cataloging, Clove minimizes manual data entry by processing video/camera feeds directly in the intake workflow.
 
----
-
-## Tech Stack
-
-- **Framework:** Next.js (App Router)
-- **Language:** TypeScript
-- **Styling:** Tailwind CSS, PostCSS
-- **Database:** SQLite / Local storage persistence
-- **State Management:** React hooks & server/client state management
-- **Deployment:** Vercel / Node.js container environments
+<p align="center">
+  <img src="docs/images/intake-preview.png" alt="Clove Intake Dashboard and Camera Detection Preview" width="85%" />
+</p>
 
 ---
 
-## Project Structure
+## Key Features
+
+- **Real-Time Camera Detection:** Integrated live feed processing (`/app/intake`) for instant object classification and item tagging.
+- **Streamlined Intake Pipeline:** Step-by-step workflow designed for high-throughput scanning, verification, and salvage recording.
+- **Local Persistence & Sync:** SQLite-backed local storage (`data/salvage.db`) ensuring offline tolerance and low latency.
+- **Adaptive UI:** Responsive interface optimized for both desktop terminals and handheld intake tablets.
+- **Fully Type-Safe:** Next.js App Router and TypeScript integration for reliable client-server state transitions.
+
+---
+
+## System Architecture
+
+```text
+               +---------------------------+
+               |     Webcam / Camera Feed  |
+               +-------------+-------------+
+                             |
+                             v
+               +---------------------------+
+               |   Clove Intake Scanner    |
+               |     (Next.js Client)      |
+               +-------------+-------------+
+                             |
+       +---------------------+---------------------+
+       |                                           |
+       v                                           v
++-------------------------+             +-------------------------+
+|  Real-Time Detection UI |             | SQLite Salvage DB       |
+|  (Preview & Annotation) |             | (Local Persistence)     |
++-------------------------+             +-------------------------+
+```
+
+---
+
+## Repository Structure
 
 ```text
 clove/
 ├── app/
-│   ├── intake/            # Item intake, inspection, and camera detection flows
+│   ├── intake/             # Intake scanner & camera detection UI
 │   │   └── page.tsx
-│   ├── layout.tsx         # Root application layout and providers
-│   └── page.tsx           # Dashboard landing view
-├── components/            # Reusable UI primitives and form components
-├── data/                  # SQLite runtime databases, schemas, and queries
+│   ├── layout.tsx          # Root layout & global style providers
+│   └── page.tsx            # Application entry & overview dashboard
+├── components/             # Reusable UI elements, modals, and buttons
+├── data/                   # Runtime SQLite storage and schemas
 │   └── salvage.db
-├── public/                # Static assets, icons, and media
-├── .gitignore
+├── docs/
+│   └── images/             # Documentation screenshots and assets
+│       ├── banner.png
+│       └── intake-preview.png
+├── public/                 # Static web assets
 ├── next.config.mjs
 ├── package.json
 ├── tailwind.config.ts
@@ -51,8 +89,9 @@ clove/
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) (v18.17.0 or later recommended)
+- [Node.js](https://nodejs.org/) (v18.17+ recommended)
 - `npm`, `pnpm`, or `yarn`
+- Web browser with webcam permissions enabled (for camera detection)
 
 ### Installation
 
@@ -62,62 +101,50 @@ clove/
    cd clove-
    ```
 
-2. **Install dependencies:**
+2. **Install project dependencies:**
    ```bash
    npm install
-   # or
-   pnpm install
-   # or
-   yarn install
    ```
 
-3. **Configure Environment Variables:**
-   Create a `.env.local` file in the root directory:
+3. **Configure environment settings:**
+   Create a `.env.local` file in your root folder:
    ```env
    NEXT_PUBLIC_APP_URL=http://localhost:3000
-   # Add any specific database paths or API keys below
    ```
 
-4. **Run the development server:**
+4. **Start the development server:**
    ```bash
    npm run dev
    ```
 
-5. **Open the application:**
-   Navigate to [http://localhost:3000](http://localhost:3000) in your browser.
+5. **Access the application:**
+   Open [http://localhost:3000](http://localhost:3000) in your browser and allow camera permissions when prompted on the `/intake` route.
 
 ---
 
-## Available Scripts
+## Scripts
 
-| Command | Description |
+| Command | Action |
 | :--- | :--- |
-| `npm run dev` | Starts the development server with Hot Module Replacement (HMR) |
-| `npm run build` | Compiles the production build |
-| `npm run start` | Boots the compiled Next.js production server |
-| `npm run lint` | Runs ESLint checks across all project files |
+| `npm run dev` | Runs the Next.js local development server |
+| `npm run build` | Builds an optimized production bundle |
+| `npm run start` | Launches the production server |
+| `npm run lint` | Analyzes code for ESLint errors |
 
 ---
 
 ## Contributing
 
-1. Fork the repository.
-2. Create a dedicated feature branch:
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-3. Commit your changes:
-   ```bash
-   git commit -m "feat: implement your feature"
-   ```
-4. Push to the branch:
-   ```bash
-   git push origin feature/your-feature-name
-   ```
-5. Open a Pull Request on GitHub.
+Contributions, issues, and feature requests are welcome!
+
+1. Fork the Project
+2. Create your Feature Branch (`git checkout -b feature/camera-optimization`)
+3. Commit your Changes (`git commit -m 'feat: improve detection accuracy'`)
+4. Push to the Branch (`git push origin feature/camera-optimization`)
+5. Open a Pull Request
 
 ---
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+Distributed under the MIT License. See `LICENSE` for more information.
